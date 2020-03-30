@@ -9,6 +9,8 @@ from bokeh.core.enums import enumeration
 from bokeh.models import HTMLBox, Model
 
 vtk_cdn = "https://unpkg.com/vtk.js"
+jszip_cdn = "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.5/jszip.js"
+
 
 @abstract
 class AbstractVTKPlot(HTMLBox):
@@ -38,6 +40,30 @@ class AbstractVTKPlot(HTMLBox):
     height = Override(default=300)
 
     width = Override(default=300)
+
+
+class VTKSynchronizedPlot(AbstractVTKPlot):
+    """
+    TODO
+    """
+
+    __javascript__ = [vtk_cdn, jszip_cdn]
+
+    __js_skip__ = {'vtk': [vtk_cdn, jszip_cdn]}
+
+    __js_require__ = {
+        "paths": {"vtk": vtk_cdn[:-3],
+                  "jszip": jszip_cdn[:-3]},
+        "exports": {"vtk": None, "jszip": None},
+        "shim": {
+            "vtk": {"exports": "vtk"},
+            "jszip": {"exports": "jszip"}
+        }
+    }
+
+    scene = String(help="""The serialized vtk.js scene""")
+
+    arrays = Dict(String, Any)
 
 
 class VTKAxes(Model):

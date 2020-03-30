@@ -29,7 +29,8 @@
       "@bokehjs/*": [
         "./node_modules/@bokeh/bokehjs/build/js/lib/*",
         "./node_modules/@bokeh/bokehjs/build/js/types/*"
-      ]
+      ],
+      "stream": ["./node_modules/readable-stream/readable.js"]
     }
   },
   "include": ["./**/*.ts"]
