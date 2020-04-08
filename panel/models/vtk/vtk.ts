@@ -98,7 +98,7 @@ export class VTKPlotView extends AbstractVTKView {
       this._vtk_renwin.getRenderer().addActor(gridActor)
     }
   }
-
+  
   _plot(): void{
     if (!this.model.data) {
       this._vtk_renwin.getRenderWindow().render()
@@ -111,11 +111,11 @@ export class VTKPlotView extends AbstractVTKView {
           renderer: this._vtk_renwin.getRenderer(),
           dataAccessHelper,
         })
-        const fn = vtk.macro.debounce(() => {
+        const fn = vtk.macro.debounce(() => setTimeout(() => {
           if (this._axes == null && this.model.axes)
             this._set_axes()
           this.model.properties.camera.change.emit()
-        }, 100)
+        }, 100), 100)
         sceneImporter.setUrl('index.json')
         sceneImporter.onReady(fn)
       }

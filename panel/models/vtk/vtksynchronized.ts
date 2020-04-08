@@ -1,179 +1,197 @@
 import * as p from "@bokehjs/core/properties"
-import {HTMLBox, HTMLBoxView} from "@bokehjs/models/layouts/html_box"
+import {PanelHTMLBoxView} from "../layout"
+import {AbstractVTKView, AbstractVTKPlot} from "./vtk_layout"
 
-const CONTEXT_NAME = '__zipFileContent__'
+import {div} from "@bokehjs/core/dom"
+import {set_size} from "../layout"
+import {FullScreenRenderWindowSynchronized} from "./panel_fullscreen_renwin_sync"
+import { vtkns } from "./vtk_utils"
 
-export class VTKSynchronizedPlotView extends HTMLBoxView {
+export class VTKSynchronizedPlotView extends AbstractVTKView {
   model: VTKSynchronizedPlot
-  protected _vtk: any
-  protected _jszip: any
-  protected _synchContext: any
-  protected _openGLRenderWindow: any
-  protected _renderWindow: any
-  protected _renderer: any
-  protected _interactor: any
-  protected _state: any
+  protected _context_name: string
+  protected _synchronizer_context: any
   protected _arrays: any
   protected _decoded_arrays: any
   protected _pending_arrays: any
-  public getArray: any
-  public resize: any
-  public registerArray: any
+  protected _camera_callback: any
+  public getArray: CallableFunction
+  public registerArray: CallableFunction
 
   initialize(): void {
-    console.log('init')
     super.initialize()
-    this._vtk = (window as any).vtk
-    this._jszip = (window as any).JSZip
-    this._arrays = {}
-    this._decoded_arrays = {}
-    this._pending_arrays = {}
-
+    if(this.model.context_name !== ''){
+      this._context_name = this.model.context_name
+    } else {
+      this._context_name = Math.random().toString(36).slice(2)
+    }
+    this._arrays = {};
+    this._decoded_arrays = {};
+    this._pending_arrays = {};
     // Internal closures
     this.getArray = (hash: string) => {
-      if (this._arrays[hash])
-      return Promise.resolve(this._arrays[hash])
+      if (this._arrays[hash]) {
+          return Promise.resolve(this._arrays[hash]);
+      }
 
       return new Promise((resolve, reject) => {
-        this._pending_arrays[hash] = { resolve, reject }
-      })
-    }
-    this.resize = () => {
-      if (this.el && this._openGLRenderWindow) {
-        const dims = this.el.getBoundingClientRect()
-        const devicePixelRatio = window.devicePixelRatio || 1
-        const ren_w = Math.floor(dims.width * devicePixelRatio)
-        const ren_h = Math.floor(dims.height * devicePixelRatio)
-        this._openGLRenderWindow.setSize(ren_w, ren_h)
-        this._renderWindow.render();
+        this._pending_arrays[hash] = { resolve, reject };
+      });
+    };
+
+    this.registerArray = (hash: string, array: any) =>
+    {
+      this._arrays[hash] = array;
+      if (this._pending_arrays[hash]) {
+          this._pending_arrays[hash].resolve(array);
       }
-    }
-    this.registerArray = (hash: string, array: any) => {
-      this._arrays[hash] = array
-      if (this._pending_arrays[hash])
-      this._pending_arrays[hash].resolve(array)
-      return true
-    }
-    window.addEventListener("resize", this.resize)
+      return true;
+    };
+
+    // Context initialisation
+    this._synchronizer_context = vtkns.SynchronizableRenderWindow.getSynchronizerContext(
+      this._context_name
+    )
+  }
+
+  render(): void {
+    console.log('render start')
+    PanelHTMLBoxView.prototype.render.call(this) // super.super.render()
+    this._orientationWidget = null
+    this._vtk_container = div()
+    set_size(this._vtk_container, this.model)
+    this.el.appendChild(this._vtk_container)
+    this._vtk_renwin = FullScreenRenderWindowSynchronized.newInstance({
+      rootContainer: this.el,
+      container: this._vtk_container,
+      synchronizerContext: this._synchronizer_context
+    })
+    this._vtk_renwin.getRenderWindow().clearOneTimeUpdaters()
+    this._decode_arrays()
+    this._plot()
+    this._remove_default_key_binding()
+    // this._create_orientation_widget()
+    // this._orientationWidget.updateMarkerOrientation()
+    this._vtk_renwin.getRenderer().resetCameraClippingRange()
+    this._vtk_renwin.getRenderWindow().render()
+    this.model.renderer_el = this._vtk_renwin
+    console.log('render end')
   }
 
   after_layout(): void {
-    if (!this._synchContext) {
-      const container = this.el;
-
-      const vtk: any = this._vtk;
-
-      this._synchContext = vtk.
-                           Rendering.
-                           Misc.
-                           vtkSynchronizableRenderWindow.
-                           getSynchronizerContext(CONTEXT_NAME)
-      this._synchContext.setFetchArrayFunction(this.getArray)
-
-      // openGLRenderWindow
-      this._openGLRenderWindow = vtk.Rendering.OpenGL.vtkRenderWindow.newInstance()
-      this._openGLRenderWindow.setContainer(container)
-
-      // RenderWindow (synchronizable)
-      this._renderWindow = vtk.Rendering.Misc.vtkSynchronizableRenderWindow.newInstance({
-        synchronizerContext: this._synchContext
-      })
-      this._renderWindow.addView(this._openGLRenderWindow);
-
-      // Size handling
-      this.resize()
-
-      // Interactor
-      this._interactor = vtk.Rendering.Core.vtkRenderWindowInteractor.newInstance()
-      this._interactor.setInteractorStyle(
-        vtk.Interaction.Style.vtkInteractorStyleTrackballCamera.newInstance()
-      )
-      this._interactor.setView(this._openGLRenderWindow)
-      this._interactor.initialize()
-      this._interactor.bindEvents(container)
-
-      this._decode_arrays()
-      this._plot()
-      this._key_binding()
-
-      // Can return undefined before synchronization
-      const getRenderer = () => this._renderWindow.getRenderers()[0]
-      const getRenderWindow = () => this._renderWindow
-
-      this.model.renderer_el = {
-        getRenderer,
-        getRenderWindow,
-      }
-    }
+    console.log('after layout start')
     super.after_layout()
-  }
-
-  _plot(): void{
-    console.log('plot')
-    this._renderWindow.synchronize(JSON.parse(this.model.scene))
-    this._renderWindow.render()
+    console.log('after layout end')
   }
 
   _decode_arrays(): void {
-    const JSZip = this._jszip
-    const jszip = new JSZip()
-    const promises: any = []
-    const arrays: any = this.model.arrays
-    const registerArray: any = this.registerArray
+    console.log('decode arrays start')
+    const jszip = new (window as any).JSZip();
+    const promises: any = [];
+    const arrays: any = this.model.arrays;
+    const registerArray: any = this.registerArray;
+    const arrays_processed = this.model.arrays_processed;
 
     function load(key: string) {
-      return jszip.loadAsync(atob(arrays[key]))
-                  .then((zip: any) => zip.file('data/' + key))
-                  .then((zipEntry: any) => zipEntry.async('arraybuffer'))
-                  .then((arraybuffer: any) => registerArray(key, arraybuffer))
+        return jszip.loadAsync(atob(arrays[key]))
+            .then((zip: any) => zip.file('data/' + key))
+            .then((zipEntry: any) => zipEntry.async('arraybuffer'))
+            .then((arraybuffer: any) => registerArray(key, arraybuffer))
+            .then(() => arrays_processed.push(key));
     }
 
     Object.keys(arrays).forEach((key: string) => {
-      if (!this._decoded_arrays[key])
-      {
-        this._decoded_arrays[key] = true
-        promises.push(load(key))
-      }
+        if (!this._decoded_arrays[key])
+        {
+            this._decoded_arrays[key] = true;
+            promises.push(load(key));
+        }
     })
 
-    Promise.all(promises).then(this._renderWindow.render)
+    // Promise.all(promises).then(this._vtk_renwin.getRenderWindow().render)
+    console.log('decode arrays end')
   }
 
-  _key_binding(): void {
-    if (this.model.enable_keybindings) {
-      document.querySelector('body')!.addEventListener('keypress',this._interactor.handleKeyPress)
-      document.querySelector('body')!.addEventListener('keydown',this._interactor.handleKeyDown)
-      document.querySelector('body')!.addEventListener('keyup',this._interactor.handleKeyUp)
-    } else {
-      document.querySelector('body')!.removeEventListener('keypress',this._interactor.handleKeyPress)
-      document.querySelector('body')!.removeEventListener('keydown',this._interactor.handleKeyDown)
-      document.querySelector('body')!.removeEventListener('keyup',this._interactor.handleKeyUp)
+  _plot(): void{
+    console.log('plot start')
+    if(this._camera_callback){
+      this._camera_callback.unsubscribe()
     }
+    this._synchronizer_context.setFetchArrayFunction(this.getArray)
+    this._vtk_renwin.getRenderWindow().setSynchronizedViewId(this.model.scene.id)
+    this._vtk_renwin.getRenderWindow().synchronize(this.model.scene)
+    this._vtk_renwin.getRenderWindow().render()
+
+    if(this._camera_callback){
+      this._camera_callback.unsubscribe()
+      this._camera_callback = null
+    }
+    this._camera_callback = this._vtk_renwin.getRenderer().getActiveCamera().onModified(
+      () => {
+          if(this._orientationWidget)
+            this._orientationWidget.updateMarkerOrientation()
+          this._vtk_renwin.getInteractor().render()
+      }
+    )
+    
+    console.log('plot end')
+  }
+
+  remove(): void {
+    console.log('remove start')
+    if(this._camera_callback){
+      this._camera_callback.unsubscribe()
+      this._camera_callback = null
+    }
+    super.remove()
+    console.log('remove end')
   }
 
   connect_signals(): void {
-    super.connect_signals()
-    this.connect(this.model.properties.scene.change, () => this._plot())
+    PanelHTMLBoxView.prototype.connect_signals.call(this) //super.super.connec_signals
+    this.connect(this.model.properties.orientation_widget.change, () => {
+      this._orientation_widget_visibility(this.model.orientation_widget)
+    })
     this.connect(this.model.properties.arrays.change, () => this._decode_arrays())
-    this.connect(this.model.properties.enable_keybindings.change, () => this._key_binding())
+    this.connect(this.model.properties.scene.change, () => {
+      this._plot()
+    })
+    this.connect(this.model.properties.one_time_reset.change, () => {
+      this._vtk_renwin.getRenderWindow().clearOneTimeUpdaters()
+    })
+    this.el.addEventListener('mouseenter', () => {
+      const interactor = this._vtk_renwin.getInteractor()
+      if(this.model.enable_keybindings){
+        document.querySelector('body')!.addEventListener('keypress',interactor.handleKeyPress)
+        document.querySelector('body')!.addEventListener('keydown',interactor.handleKeyDown)
+        document.querySelector('body')!.addEventListener('keyup',interactor.handleKeyUp)
+      }
+    })
+    this.el.addEventListener('mouseleave', () => {
+      const interactor = this._vtk_renwin.getInteractor()
+      document.querySelector('body')!.removeEventListener('keypress',interactor.handleKeyPress)
+      document.querySelector('body')!.removeEventListener('keydown',interactor.handleKeyDown)
+      document.querySelector('body')!.removeEventListener('keyup',interactor.handleKeyUp)
+    })
+
   }
 }
 
-
 export namespace VTKSynchronizedPlot {
   export type Attrs = p.AttrsOf<Props>
-  export type Props = HTMLBox.Props & {
-    scene: p.Property<string>
+  export type Props = AbstractVTKPlot.Props & {
+    scene: p.Property<any>
     arrays: p.Property<any>
-    append: p.Property<boolean>
-    camera: p.Property<any>
+    arrays_processed: p.Property<string[]>
     enable_keybindings: p.Property<boolean>
+    context_name: p.Property<string>
+    one_time_reset: p.Property<boolean>
   }
 }
 
 export interface VTKSynchronizedPlot extends VTKSynchronizedPlot.Attrs {}
 
-export class VTKSynchronizedPlot extends HTMLBox {
+export class VTKSynchronizedPlot extends AbstractVTKPlot {
   properties: VTKSynchronizedPlot.Props
   renderer_el: any
 
@@ -189,15 +207,15 @@ export class VTKSynchronizedPlot extends HTMLBox {
   }
 
   static init_VTKSynchronizedPlot(): void {
-    this.prototype.type = "VTKSynchronizedPlot"
     this.prototype.default_view = VTKSynchronizedPlotView
 
     this.define<VTKSynchronizedPlot.Props>({
-      scene:              [ p.String         ],
+      scene:              [ p.Any, {}        ],
       arrays:             [ p.Any, {}        ],
-      append:             [ p.Boolean, false ],
-      camera:             [ p.Any            ],
+      arrays_processed:   [ p.Array, []      ],
       enable_keybindings: [ p.Boolean, false ],
+      context_name:       [ p.String, ''     ],
+      one_time_reset:     [ p.Boolean        ],
     })
 
     this.override({

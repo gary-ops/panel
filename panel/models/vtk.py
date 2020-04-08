@@ -6,7 +6,7 @@ from bokeh.core.properties import (String, Bool, Dict, Any, Override,
                                    Instance, Int, Float, PositiveInt, Enum)
 from bokeh.core.has_props import abstract
 from bokeh.core.enums import enumeration
-from bokeh.models import HTMLBox, Model
+from bokeh.models import HTMLBox, Model, ColumnDataSource
 
 vtk_cdn = "https://unpkg.com/vtk.js"
 jszip_cdn = "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.5/jszip.js"
@@ -61,9 +61,15 @@ class VTKSynchronizedPlot(AbstractVTKPlot):
         }
     }
 
-    scene = String(help="""The serialized vtk.js scene""")
+    scene = Dict(String, Any, help="""The serialized vtk.js scene on json format""")
 
     arrays = Dict(String, Any)
+
+    enable_keybindings = Bool(default=False)
+
+    context_name = String(default='', help="""Name of the synchronized context""")
+
+    one_time_reset = Bool(default=False)
 
 
 class VTKAxes(Model):

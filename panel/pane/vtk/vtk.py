@@ -26,6 +26,7 @@ if sys.version_info >= (2, 7):
 else:
     base64encode = lambda x: x.encode('base64')
 
+
 class VTKSynchronized(PaneBase):
     """
     VTK panes allow rendering VTK objects.
@@ -40,79 +41,93 @@ class VTKSynchronized(PaneBase):
         context if they interact with already binded keys
     """)
 
+    orientation_widget = param.Boolean(default=False, doc="""
+        Activate/Deactivate the orientation widget display.""")
+
+    _one_time_reset = param.Boolean(default=False)
+
     _updates = True
-    _serializers = {}
 
-    scene = param.String(doc="""Description of the VTK scene""")
-    arrays = param.Dict(doc="""Dict of gzipped VTK data arrays""")
+    _rerender_params = ['object']
 
-    _rerender_params = ['object', 'scene']
+    _rename = {'_one_time_reset': 'one_time_reset'}
 
     @classmethod
     def applies(cls, obj):
-        if (isinstance(obj, string_types) and obj.endswith('.vtkjs') or
-            any([isinstance(obj, k) for k in cls._serializers.keys()])):
-            return True
-        elif 'vtk' not in sys.modules:
+        if 'vtk' not in sys.modules:
             return False
         else:
             import vtk
             return isinstance(obj, vtk.vtkRenderWindow)
+    
+    def __init__(self, object=None, **params):
+        super(VTKSynchronized, self).__init__(object, **params)
+        import panel.pane.vtk.synchronizable_serializer as rws
+        self._context = rws.SynchronizationContext(debug=True)
+        rws.initializeSerializers()
+        self._scene, self._arrays = self._serialize_ren_win(object)
 
+    
     def _get_model(self, doc, root=None, parent=None, comm=None):
         """
         Should return the bokeh model to be rendered.
         """
         if 'panel.models.vtk' not in sys.modules:
             if isinstance(comm, JupyterComm):
-                self.param.warning('VTKPlotSynchronized was not imported on instantiation '
+                self.param.warning('VTKSynchronizedPlot was not imported on instantiation '
                                    'and may not render in a notebook. Restart '
                                    'the notebook kernel and ensure you load '
                                    'it as part of the extension using:'
                                    '\n\npn.extension(\'vtk\')\n')
-            from ...models.vtk import VTKPlotSynchronized
+            from ...models.vtk import VTKSynchronizedPlot
         else:
-            VTKPlotSynchronized = getattr(sys.modules['panel.models.vtk'], 'VTKPlotSynchronized')
-
-        self.scene, self.arrays = self._get_vtkjs()
+            VTKSynchronizedPlot = getattr(sys.modules['panel.models.vtk'], 'VTKSynchronizedPlot')
 
         props = self._process_param_change(self._init_properties())
-        model = VTKPlotSynchronized(**props)
+        props.update(scene=self._scene, arrays=self._arrays, context_name='panel')
+        model = VTKSynchronizedPlot(**props)
 
         if root is None:
             root = model
-        self._link_props(model, ['scene', 'arrays', 'camera', 'enable_keybindings'], doc, root, comm)
+        self._link_props(model, ['enable_keybindings', 'orientation_widget', 'one_time_reset'], doc, root, comm)
         self._models[root.ref['id']] = (model, parent)
         return model
 
-    @classmethod
-    def register_serializer(cls, class_type, serializer):
-        """
-        Register a seriliazer for a given type of class.
-        A serializer is a function which take an instance of `class_type` 
-        (like a vtk.vtkRenderWindow) as input and return the binary zip 
-        stream of the corresponding `vtkjs` file 
-        """
-        cls._serializers.update({class_type:serializer})
-
-    def _get_vtkjs(self):
-        if self.object is None:
-            vtkjs = None
+    def link_camera(self, other):
+        if not isinstance(other, VTKSynchronized):
+            raise TypeError('Only instance of VTKSynchronized class can be linked')
         else:
-            available_serializer = [v for k, v in VTK._serializers.items() if isinstance(self.object, k)]
-            if len(available_serializer) == 0:
-                import vtk
-                from .vtkjs_serializer import render_window_serializer
-                VTK.register_serializer(vtk.vtkRenderWindow, render_window_serializer)
-                serializer = render_window_serializer
-            else:
-                serializer = available_serializer[0]
-            return serializer(self.object)
-        return (None, None)
+            other_camera = other.get_renderer().GetActiveCamera()
+            self.get_renderer().SetActiveCamera(other_camera)
+            self.param.trigger('object')
+    
+    def add_actor(self, actors, reset_camera=True):
+        for actor in actors:
+            self.get_renderer().AddActor(actor)
+        if reset_camera: self.reset_camera()
+        self.param.trigger('object')
+
+    def get_renderer(self):
+        return list(self.object.GetRenderers())[0]
+
+    def reset_camera(self):
+        self.get_renderer().ResetCamera()
+        self._one_time_reset = not self._one_time_reset
+
+    def _serialize_ren_win(self, ren_win):
+        import panel.pane.vtk.synchronizable_serializer as rws
+        ren_win.OffScreenRenderingOn() # to not pop a vtk windows
+        ren_win.Modified()
+        ren_win.Render()
+        scene = rws.serializeInstance(None, ren_win, str(id(ren_win)), self._context, 0)
+        arrays = {name: self._context.getCachedDataArray(name, compression=True)
+                for name in self._context.dataArrayCache.keys()}
+        return scene, arrays
 
     def _update(self, model):
-        model.scene, local_arrays = self._get_vtkjs()
-        model.arrays.update(local_arrays)
+        self._scene, self._arrays = self._serialize_ren_win(self.object)
+        model.update(arrays=self._arrays)
+        model.update(scene=self._scene)
 
 
 
