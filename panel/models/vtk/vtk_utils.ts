@@ -46,17 +46,6 @@ if (vtk) {
   vtkns['VolumeController'] = vtk.Interaction.UI.vtkVolumeController
   vtkns['VolumeMapper'] = vtk.Rendering.Core.vtkVolumeMapper
   vtkns['WidgetManager'] = vtk.Widgets.Core.vtkWidgetManager
-  vtkns.SynchronizableRenderWindow
-       .vtkObjectManager
-       .setTypeMapping('vtkLookupTable', vtkns.LookupTable.newInstance, lookupTableUpdater)
-
-}
-
-function lookupTableUpdater(instance: any, state: any, context: any) {
-  if(state.properties.table){
-    state.properties.table = vtkns.DataArray.newInstance(state.properties.table);
-  }
-  vtkns.SynchronizableRenderWindow.vtkObjectManager.genericUpdater(instance, state, context);
 }
 
 export function exclude_by_keys(obj:any, excludes: string[] = []): any {

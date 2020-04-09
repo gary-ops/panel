@@ -2,8 +2,12 @@ import os, io
 import sys, re, hashlib, base64
 import time, zipfile
 
+import numpy as np
+
+from vtk.util import numpy_support
 from vtk.vtkFiltersGeometry import vtkCompositeDataGeometryFilter, vtkGeometryFilter
 from vtk.vtkCommonCore import vtkTypeUInt32Array
+from vtk.vtkRenderingCorePython import vtkColorTransferFunction
 
 
 py3 = sys.version_info >= (3,0)
@@ -189,6 +193,7 @@ def initializeSerializers():
     registerInstanceSerializer('vtkOpenGLTexture', textureSerializer)
 
     # LookupTables/TransferFunctions
+    registerInstanceSerializer('vtkLookupTable', lookupTableSerializer)
     registerInstanceSerializer('vtkPVDiscretizableColorTransferFunction', colorTransferFunctionSerializer)
 
     # Property
@@ -307,19 +312,30 @@ def getArrayDescription(array, context):
 
 # -----------------------------------------------------------------------------
 
+def lookupTableToColorTransferFunction(lookupTable):
+    lutArray = numpy_support.vtk_to_numpy(lookupTable.GetTable())
+    tableRange = lookupTable.GetTableRange()
+    points = np.linspace(*tableRange, num=lutArray.shape[0])
+    ctf = vtkColorTransferFunction()
+    for x, rgba in zip(points, lutArray):
+        ctf.AddRGBPoint(x, *rgba[:3]/255)
+    return ctf
+
+# -----------------------------------------------------------------------------
+
 def extractRequiredFields(extractedFields, mapper, dataset, context, requestedFields=['Normals', 'TCoords']):
     # FIXME should evolve and support funky mapper which leverage many arrays
     if mapper.IsA('vtkMapper'):
         scalarVisibility = mapper.GetScalarVisibility()
         colorArrayName = mapper.GetArrayName()
         scalarMode = mapper.GetScalarMode()
-        if scalarVisibility and scalarMode in [1, 3]:
+        if scalarVisibility and scalarMode == 3:
             arrayMeta = getArrayDescription(dataset.GetPointData().GetArray(colorArrayName), context)
             if arrayMeta:
                 arrayMeta['location'] = 'pointData'
                 arrayMeta['registration'] = 'setScalars'
                 extractedFields.append(arrayMeta)
-        if scalarVisibility and scalarMode in [2, 4]:
+        if scalarVisibility and scalarMode == 4:
             arrayMeta = getArrayDescription(dataset.GetCellData().GetArray(colorArrayName), context)
             if arrayMeta:
                 arrayMeta['location'] = 'cellData'
@@ -521,53 +537,6 @@ def genericMapperSerializer(parent, mapper, mapperId, context, depth):
 
 # -----------------------------------------------------------------------------
 
-def lookupTableSerializer(parent, lookupTable, lookupTableId, context, depth):
-    # No children in this case, so no additions to bindings and return empty list
-    # But we do need to add instance
-
-    # tableArray = lookupTable.GetTable()
-    # table_ranges = []
-    # if tableArray.GetNumberOfComponents() > 1:
-    #     for i in range(tableArray.GetNumberOfComponents()):
-    #         table_ranges.append(getRangeInfo(tableArray, i))
-    #     table_ranges.append(getRangeInfo(tableArray, -1))
-    # else:
-    #     table_ranges.append(getRangeInfo(tableArray, 0))
-    
-    # table = {
-    #     'numberOfComponents': tableArray.GetNumberOfComponents(),
-    #     'size': tableArray.GetSize(),
-    #     'dataType': getJSArrayType(tableArray),
-    #     'ranges': table_ranges,
-    #     'values': numpy_support.vtk_to_numpy(tableArray).ravel().tolist(),
-    # }
-
-    return {
-        'parent': getReferenceId(parent),
-        'id': lookupTableId,
-        'type': 'vtkLookupTable',
-        'properties': {
-            'numberOfColors': lookupTable.GetNumberOfColors(),
-            'valueRange': lookupTable.GetRange(),
-            'hueRange': lookupTable.GetHueRange(),
-            # 'alphaRange': lookupTable.GetAlphaRange(),    # Causes weird rendering artifacts on client
-            'saturationRange': lookupTable.GetSaturationRange(),
-            'nanColor': lookupTable.GetNanColor(),
-            'belowRangeColor': lookupTable.GetBelowRangeColor(),
-            'aboveRangeColor': lookupTable.GetAboveRangeColor(),
-            'useAboveRangeColor': 1 if lookupTable.GetUseAboveRangeColor() else 0,
-            'useBelowRangeColor': 1 if lookupTable.GetUseBelowRangeColor() else 0,
-            'alpha': lookupTable.GetAlpha(),
-            'vectorSize': lookupTable.GetVectorSize(),
-            'vectorComponent': lookupTable.GetVectorComponent(),
-            'vectorMode': lookupTable.GetVectorMode(),
-            'indexedLookup': lookupTable.GetIndexedLookup(),
-            # 'table': table,
-        },
-    }
-
-# -----------------------------------------------------------------------------
-
 def propertySerializer(parent, propObj, propObjId, context, depth):
     representation = propObj.GetRepresentation() if hasattr(propObj, 'GetRepresentation') else 2
     colorToUse = propObj.GetDiffuseColor() if hasattr(propObj, 'GetDiffuseColor') else [1, 1, 1]
@@ -708,6 +677,12 @@ def mergeToPolydataSerializer(parent, dataObject, dataObjectId, context, depth):
 
 # -----------------------------------------------------------------------------
 
+def lookupTableSerializer(parent, lookupTable, lookupTableId, context, depth):
+    ctf = lookupTableToColorTransferFunction(lookupTable)
+    return colorTransferFunctionSerializer(parent, ctf, lookupTableId, context, depth)
+
+# -----------------------------------------------------------------------------
+
 def colorTransferFunctionSerializer(parent, instance, objId, context, depth):
     nodes = []
 
@@ -725,7 +700,7 @@ def colorTransferFunctionSerializer(parent, instance, objId, context, depth):
             'clamping': 1 if instance.GetClamping() else 0,
             'colorSpace': instance.GetColorSpace(),
             'hSVWrap': 1 if instance.GetHSVWrap() else 0,
-            # 'nanColor': instance.GetNanColor(),                                    # Breaks client
+            # 'nanColor': instance.GetNanColor(),                      # Breaks client
             # 'belowRangeColor': instance.GetBelowRangeColor(),        # Breaks client
             # 'aboveRangeColor': instance.GetAboveRangeColor(),        # Breaks client
             # 'useAboveRangeColor': True if instance.GetUseAboveRangeColor() else False,
