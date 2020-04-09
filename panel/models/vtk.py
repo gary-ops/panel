@@ -6,7 +6,7 @@ from bokeh.core.properties import (String, Bool, Dict, Any, Override,
                                    Instance, Int, Float, PositiveInt, Enum)
 from bokeh.core.has_props import abstract
 from bokeh.core.enums import enumeration
-from bokeh.models import HTMLBox, Model, ColumnDataSource
+from bokeh.models import HTMLBox, Model
 
 vtk_cdn = "https://unpkg.com/vtk.js"
 jszip_cdn = "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.5/jszip.js"

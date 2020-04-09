@@ -61,12 +61,20 @@ class VTKSynchronized(PaneBase):
             return isinstance(obj, vtk.vtkRenderWindow)
     
     def __init__(self, object=None, **params):
+        if object is None:
+            object = self._make_ren_win()
         super(VTKSynchronized, self).__init__(object, **params)
         import panel.pane.vtk.synchronizable_serializer as rws
         self._context = rws.SynchronizationContext(debug=True)
         rws.initializeSerializers()
         self._scene, self._arrays = self._serialize_ren_win(object)
 
+    def _make_ren_win(self):
+        import vtk
+        ren = vtk.vtkRenderer()
+        ren_win = vtk.vtkRenderWindow()
+        ren_win.AddRenderer(ren)
+        return ren_win
     
     def _get_model(self, doc, root=None, parent=None, comm=None):
         """

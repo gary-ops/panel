@@ -1,10 +1,7 @@
-import vtk
-
 import os, io
 import sys, re, hashlib, base64
-import json, time, zipfile
+import time, zipfile
 
-from vtk.util import numpy_support
 from vtk.vtkFiltersGeometry import vtkCompositeDataGeometryFilter, vtkGeometryFilter
 from vtk.vtkCommonCore import vtkTypeUInt32Array
 
@@ -192,7 +189,6 @@ def initializeSerializers():
     registerInstanceSerializer('vtkOpenGLTexture', textureSerializer)
 
     # LookupTables/TransferFunctions
-    registerInstanceSerializer('vtkLookupTable', lookupTableSerializer)
     registerInstanceSerializer('vtkPVDiscretizableColorTransferFunction', colorTransferFunctionSerializer)
 
     # Property
@@ -529,22 +525,22 @@ def lookupTableSerializer(parent, lookupTable, lookupTableId, context, depth):
     # No children in this case, so no additions to bindings and return empty list
     # But we do need to add instance
 
-    tableArray = lookupTable.GetTable()
-    table_ranges = []
-    if tableArray.GetNumberOfComponents() > 1:
-        for i in range(tableArray.GetNumberOfComponents()):
-            table_ranges.append(getRangeInfo(tableArray, i))
-        table_ranges.append(getRangeInfo(tableArray, -1))
-    else:
-        table_ranges.append(getRangeInfo(tableArray, 0))
+    # tableArray = lookupTable.GetTable()
+    # table_ranges = []
+    # if tableArray.GetNumberOfComponents() > 1:
+    #     for i in range(tableArray.GetNumberOfComponents()):
+    #         table_ranges.append(getRangeInfo(tableArray, i))
+    #     table_ranges.append(getRangeInfo(tableArray, -1))
+    # else:
+    #     table_ranges.append(getRangeInfo(tableArray, 0))
     
-    table = {
-        'numberOfComponents': tableArray.GetNumberOfComponents(),
-        'size': tableArray.GetSize(),
-        'dataType': getJSArrayType(tableArray),
-        'ranges': table_ranges,
-        'values': numpy_support.vtk_to_numpy(tableArray).ravel().tolist(),
-    }
+    # table = {
+    #     'numberOfComponents': tableArray.GetNumberOfComponents(),
+    #     'size': tableArray.GetSize(),
+    #     'dataType': getJSArrayType(tableArray),
+    #     'ranges': table_ranges,
+    #     'values': numpy_support.vtk_to_numpy(tableArray).ravel().tolist(),
+    # }
 
     return {
         'parent': getReferenceId(parent),
