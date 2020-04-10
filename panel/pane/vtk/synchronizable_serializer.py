@@ -1,9 +1,6 @@
 import base64
 import hashlib
 import io
-import json
-import os
-import re
 import struct
 import sys
 import time
@@ -309,7 +306,7 @@ def getReferenceId(ref):
     if ref:
         try:
             return ref.__this__[1:17]
-        except:
+        except Exception:
             idStr = str(ref)[-12:-1]
             print('====> fallback ID %s for %s' % (idStr, ref))
             return idStr
@@ -390,7 +387,7 @@ def extractRequiredFields(extractedFields, parent, dataset, context, requestedFi
         scalarVisibility = mapper.GetScalarVisibility()
         arrayAccessMode = mapper.GetArrayAccessMode()
         colorArrayName = mapper.GetArrayName() if arrayAccessMode == 1 else mapper.GetArrayId()
-        colorMode = mapper.GetColorMode()
+        # colorMode = mapper.GetColorMode()
         scalarMode = mapper.GetScalarMode()
         if scalarVisibility and scalarMode in (1, 3):
             arrayMeta = getArrayDescription(
@@ -651,11 +648,11 @@ def lookupTableSerializer(parent, lookupTable, lookupTableId, context, depth):
     if hasattr(lookupTable, 'GetHueRange'):
         try:
             lookupTable.GetHueRange(lookupTableHueRange)
-        except Exception as inst:
+        except Exception:
             pass
 
     lutSatRange = lookupTable.GetSaturationRange()
-    lutAlphaRange = lookupTable.GetAlphaRange()
+    # lutAlphaRange = lookupTable.GetAlphaRange()
 
     return {
         'parent': getReferenceId(parent),
@@ -843,7 +840,7 @@ def mergeToPolydataSerializer(parent, dataObject, dataObjectId, context, depth):
         gf.Update()
         dataset = gf.GetOutput()
     else:
-        dataset = mapper.GetInput()
+        dataset = parent.GetInput()
 
     return polydataSerializer(parent, dataset, dataObjectId, context, depth)
 
