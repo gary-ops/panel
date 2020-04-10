@@ -56,10 +56,9 @@ else:
     base64Encode = lambda x: x.encode('base64')
 
 def hashDataArray(dataArray):
-    hashedBit = base64Encode(hashlib.md5(buffer(dataArray)).digest()).strip()
-    md5sum = re.sub('==$', '', hashedBit)
+    hashedBit = hashlib.md5(buffer(dataArray)).hexdigest()
     typeCode = arrayTypesMapping[dataArray.GetDataType()]
-    return '%s_%d%s' % (md5sum, dataArray.GetSize(), typeCode)
+    return '%s_%d%s' % (hashedBit, dataArray.GetSize(), typeCode)
 
 def getJSArrayType(dataArray):
     return javascriptMapping[arrayTypesMapping[dataArray.GetDataType()]]
