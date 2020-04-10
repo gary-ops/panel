@@ -61,14 +61,23 @@ export class VTKSynchronizedPlotView extends AbstractVTKView {
     this._vtk_container = div()
     set_size(this._vtk_container, this.model)
     this.el.appendChild(this._vtk_container)
+    let renderer = null
+    if(this._vtk_renwin){
+      renderer = this._vtk_renwin.getRenderer()
+    }
     this._vtk_renwin = FullScreenRenderWindowSynchronized.newInstance({
       rootContainer: this.el,
       container: this._vtk_container,
       synchronizerContext: this._synchronizer_context
     })
-    this._vtk_renwin.getRenderWindow().clearOneTimeUpdaters()
-    this._decode_arrays()
-    this._plot()
+    
+    if(!renderer) {
+      this._vtk_renwin.getRenderWindow().clearOneTimeUpdaters()
+      this._decode_arrays()
+      this._plot()
+    } else {
+      this._vtk_renwin.getRenderWindow().addRenderer(renderer)
+    }
     this._remove_default_key_binding()
     // this._create_orientation_widget()
     // this._orientationWidget.updateMarkerOrientation()
@@ -107,8 +116,6 @@ export class VTKSynchronizedPlotView extends AbstractVTKView {
             promises.push(load(key));
         }
     })
-
-    // Promise.all(promises).then(this._vtk_renwin.getRenderWindow().render)
     console.log('decode arrays end')
   }
 
@@ -118,6 +125,10 @@ export class VTKSynchronizedPlotView extends AbstractVTKView {
       this._camera_callback.unsubscribe()
     }
     this._synchronizer_context.setFetchArrayFunction(this.getArray)
+    const renderer = this._synchronizer_context.getInstance(this.model.scene.dependencies[0].id)
+    if(renderer && !this._vtk_renwin.getRenderer()){
+      this._vtk_renwin.getRenderWindow().addRenderer(renderer)
+    }
     this._vtk_renwin.getRenderWindow().setSynchronizedViewId(this.model.scene.id)
     this._vtk_renwin.getRenderWindow().synchronize(this.model.scene)
     this._vtk_renwin.getRenderWindow().render()

@@ -122,12 +122,20 @@ class VTKSynchronized(PaneBase):
         self.get_renderer().ResetCamera()
         self._one_time_reset = not self._one_time_reset
 
+    def unlink_camera(self, reset_camera=False):
+        import vtk
+        new_camera = vtk.vtkCamera()
+        self.get_renderer().SetActiveCamera(new_camera)
+        self.get_renderer().ResetCamera()
+        self.get_renderer().ResetCameraClippingRange()
+        self.param.trigger('object')
+
     def _serialize_ren_win(self, ren_win):
         import panel.pane.vtk.synchronizable_serializer as rws
         ren_win.OffScreenRenderingOn() # to not pop a vtk windows
         ren_win.Modified()
         ren_win.Render()
-        scene = rws.serializeInstance(None, ren_win, str(id(ren_win)), self._context, 0)
+        scene = rws.serializeInstance(None, ren_win, rws.getReferenceId(ren_win), self._context, 0)
         arrays = {name: self._context.getCachedDataArray(name, compression=True)
                 for name in self._context.dataArrayCache.keys()}
         return scene, arrays
