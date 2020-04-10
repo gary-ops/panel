@@ -1,10 +1,8 @@
 import os, io
 import sys, re, hashlib, base64
 import time, zipfile
+import struct
 
-import numpy as np
-
-from vtk.util import numpy_support
 from vtk.vtkFiltersGeometry import vtkCompositeDataGeometryFilter, vtkGeometryFilter
 from vtk.vtkCommonCore import vtkTypeUInt32Array
 from vtk.vtkRenderingCorePython import vtkColorTransferFunction
@@ -311,14 +309,40 @@ def getArrayDescription(array, context):
 
 # -----------------------------------------------------------------------------
 
+def dataTableToList(dataTable):
+    dataType = arrayTypesMapping[dataTable.GetDataType()]
+    elementSize = struct.calcsize(dataType)
+    nbValues = dataTable.GetNumberOfValues()
+    nbComponents = dataTable.GetNumberOfComponents()
+    nbytes = elementSize * nbValues
+    if dataType != ' ':
+        with io.BytesIO(buffer(dataTable)) as stream:
+            data = list(struct.unpack(dataType*nbValues ,stream.read(nbytes)))
+        return [data[idx*nbComponents:(idx+1)*nbComponents]
+                    for idx in range(nbValues//nbComponents)]
+
+    return None
+
+# -----------------------------------------------------------------------------
+
+def linspace(start, stop, num):
+    delta = (stop - start)/(num-1)
+    return [start + i*delta for i in range(num)]
+
+# -----------------------------------------------------------------------------
+
 def lookupTableToColorTransferFunction(lookupTable):
-    lutArray = numpy_support.vtk_to_numpy(lookupTable.GetTable())
-    tableRange = lookupTable.GetTableRange()
-    points = np.linspace(*tableRange, num=lutArray.shape[0])
-    ctf = vtkColorTransferFunction()
-    for x, rgba in zip(points, lutArray):
-        ctf.AddRGBPoint(x, *rgba[:3]/255)
-    return ctf
+    dataTable = lookupTable.GetTable()
+    table = dataTableToList(dataTable)
+    if table:
+        tableRange = lookupTable.GetTableRange()
+        points = linspace(*tableRange, num=len(table))
+        ctf = vtkColorTransferFunction()
+        for x, rgba in zip(points, table):
+            ctf.AddRGBPoint(x, *[x/255 for x in rgba[:3]])
+        return ctf
+
+    return None
 
 # -----------------------------------------------------------------------------
 
@@ -328,13 +352,13 @@ def extractRequiredFields(extractedFields, mapper, dataset, context, requestedFi
         scalarVisibility = mapper.GetScalarVisibility()
         colorArrayName = mapper.GetArrayName()
         scalarMode = mapper.GetScalarMode()
-        if scalarVisibility and scalarMode == 3:
+        if scalarVisibility and scalarMode in (1, 3):
             arrayMeta = getArrayDescription(dataset.GetPointData().GetArray(colorArrayName), context)
             if arrayMeta:
                 arrayMeta['location'] = 'pointData'
                 arrayMeta['registration'] = 'setScalars'
                 extractedFields.append(arrayMeta)
-        if scalarVisibility and scalarMode == 4:
+        if scalarVisibility and scalarMode in (2, 4):
             arrayMeta = getArrayDescription(dataset.GetCellData().GetArray(colorArrayName), context)
             if arrayMeta:
                 arrayMeta['location'] = 'cellData'
@@ -405,7 +429,7 @@ def genericActorSerializer(parent, actor, actorId, context, depth):
             texture = actor.GetTexture()
         else:
             if context.debugAll: print('This actor does not have a GetTexture method')
-        
+
         if texture:
             textureId = getReferenceId(texture)
             textureInstance = serializeInstance(actor, texture, textureId, context, depth + 1)
