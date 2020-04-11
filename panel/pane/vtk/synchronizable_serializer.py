@@ -517,6 +517,7 @@ def genericActorSerializer(parent, actor, actorId, context, depth):
                 'origin': actor.GetOrigin(),
                 'position': actor.GetPosition(),
                 'scale': actor.GetScale(),
+                'orientation': actor.GetOrientation(),
                 # vtkActor
                 'forceOpaque': actor.GetForceOpaque(),
                 'forceTranslucent': actor.GetForceTranslucent()

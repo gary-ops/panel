@@ -67,7 +67,6 @@ class VTKSynchronized(PaneBase):
         import panel.pane.vtk.synchronizable_serializer as rws
         self._context = rws.SynchronizationContext(debug=True)
         rws.initializeSerializers()
-        self._scene, self._arrays = self._serialize_ren_win(object)
 
     def _make_ren_win(self):
         import vtk
@@ -92,7 +91,8 @@ class VTKSynchronized(PaneBase):
             VTKSynchronizedPlot = getattr(sys.modules['panel.models.vtk'], 'VTKSynchronizedPlot')
 
         props = self._process_param_change(self._init_properties())
-        props.update(scene=self._scene, arrays=self._arrays, context_name='panel')
+        scene, arrays = self._serialize_ren_win(self.object)
+        props.update(scene=scene, arrays=arrays)
         model = VTKSynchronizedPlot(**props)
 
         if root is None:
@@ -102,6 +102,9 @@ class VTKSynchronized(PaneBase):
         return model
 
     def link_camera(self, other):
+        """
+        Associate the camera of an other VTKSynchronized pane to this renderer
+        """
         if not isinstance(other, VTKSynchronized):
             raise TypeError('Only instance of VTKSynchronized class can be linked')
         else:
@@ -109,20 +112,34 @@ class VTKSynchronized(PaneBase):
             self.get_renderer().SetActiveCamera(other_camera)
             self.param.trigger('object')
     
-    def add_actor(self, actors, reset_camera=True):
+    def add_actors(self, actors, reset_camera=True):
+        """
+        Add a list of `actors` to the VTK renderer
+        if `reset_camera` is True, the current camera and it's clipping
+        will be reset.
+        """
         for actor in actors:
             self.get_renderer().AddActor(actor)
         if reset_camera: self.reset_camera()
         self.param.trigger('object')
 
     def get_renderer(self):
+        """
+        Get the vtk Renderer associated to this pane
+        """
         return list(self.object.GetRenderers())[0]
 
     def reset_camera(self):
+        """
+        Reset the camera
+        """
         self.get_renderer().ResetCamera()
-        self._one_time_reset = not self._one_time_reset
+        self._one_time_reset = not self._one_time_reset #trigger event
 
-    def unlink_camera(self, reset_camera=False):
+    def unlink_camera(self):
+        """
+        Create a fresh vtkCamera instance and set it to the renderer
+        """
         import vtk
         new_camera = vtk.vtkCamera()
         self.get_renderer().SetActiveCamera(new_camera)
@@ -141,10 +158,11 @@ class VTKSynchronized(PaneBase):
         return scene, arrays
 
     def _update(self, model):
-        self._scene, self._arrays = self._serialize_ren_win(self.object)
-        model.update(arrays=self._arrays)
-        model.update(scene=self._scene)
-
+        scene, arrays = self._serialize_ren_win(self.object)
+        arrays_not_processed = {k:val for k,val in arrays.items() 
+                                if k not in model.arrays_processed}
+        model.update(arrays=arrays_not_processed)
+        model.update(scene=scene)
 
 
 class VTKVolume(PaneBase):

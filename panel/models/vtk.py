@@ -3,7 +3,8 @@
 Defines custom VTKPlot bokeh model to render VTK objects.
 """
 from bokeh.core.properties import (String, Bool, Dict, Any, Override,
-                                   Instance, Int, Float, PositiveInt, Enum)
+                                   Instance, Int, Float, PositiveInt,
+                                   Enum, List)
 from bokeh.core.has_props import abstract
 from bokeh.core.enums import enumeration
 from bokeh.models import HTMLBox, Model
@@ -67,9 +68,9 @@ class VTKSynchronizedPlot(AbstractVTKPlot):
 
     enable_keybindings = Bool(default=False)
 
-    context_name = String(default='', help="""Name of the synchronized context""")
-
     one_time_reset = Bool(default=False)
+
+    arrays_processed = List(String)
 
 
 class VTKAxes(Model):

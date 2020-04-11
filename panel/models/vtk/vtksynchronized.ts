@@ -7,9 +7,10 @@ import {set_size} from "../layout"
 import {FullScreenRenderWindowSynchronized} from "./panel_fullscreen_renwin_sync"
 import { vtkns } from "./vtk_utils"
 
+const CONTEXT_NAME = 'panel'
+
 export class VTKSynchronizedPlotView extends AbstractVTKView {
   model: VTKSynchronizedPlot
-  protected _context_name: string
   protected _synchronizer_context: any
   protected _arrays: any
   protected _decoded_arrays: any
@@ -20,11 +21,6 @@ export class VTKSynchronizedPlotView extends AbstractVTKView {
 
   initialize(): void {
     super.initialize()
-    if(this.model.context_name !== ''){
-      this._context_name = this.model.context_name
-    } else {
-      this._context_name = Math.random().toString(36).slice(2)
-    }
     this._arrays = {};
     this._decoded_arrays = {};
     this._pending_arrays = {};
@@ -49,13 +45,11 @@ export class VTKSynchronizedPlotView extends AbstractVTKView {
     };
 
     // Context initialisation
-    this._synchronizer_context = vtkns.SynchronizableRenderWindow.getSynchronizerContext(
-      this._context_name
-    )
+    this._synchronizer_context = vtkns.SynchronizableRenderWindow
+                                      .getSynchronizerContext(CONTEXT_NAME)
   }
 
   render(): void {
-    console.log('render start')
     PanelHTMLBoxView.prototype.render.call(this) // super.super.render()
     this._orientationWidget = null
     this._vtk_container = div()
@@ -84,17 +78,13 @@ export class VTKSynchronizedPlotView extends AbstractVTKView {
     this._vtk_renwin.getRenderer().resetCameraClippingRange()
     this._vtk_renwin.getRenderWindow().render()
     this.model.renderer_el = this._vtk_renwin
-    console.log('render end')
   }
 
   after_layout(): void {
-    console.log('after layout start')
     super.after_layout()
-    console.log('after layout end')
   }
 
   _decode_arrays(): void {
-    console.log('decode arrays start')
     const jszip = new (window as any).JSZip();
     const promises: any = [];
     const arrays: any = this.model.arrays;
@@ -116,11 +106,12 @@ export class VTKSynchronizedPlotView extends AbstractVTKView {
             promises.push(load(key));
         }
     })
-    console.log('decode arrays end')
+    Promise.all(promises).then(() => {
+      this.model.arrays_processed = [...this.model.arrays_processed]
+    })
   }
 
   _plot(): void{
-    console.log('plot start')
     if(this._camera_callback){
       this._camera_callback.unsubscribe()
     }
@@ -144,18 +135,14 @@ export class VTKSynchronizedPlotView extends AbstractVTKView {
           this._vtk_renwin.getInteractor().render()
       }
     )
-    
-    console.log('plot end')
   }
 
   remove(): void {
-    console.log('remove start')
     if(this._camera_callback){
       this._camera_callback.unsubscribe()
       this._camera_callback = null
     }
     super.remove()
-    console.log('remove end')
   }
 
   connect_signals(): void {
@@ -195,7 +182,6 @@ export namespace VTKSynchronizedPlot {
     arrays: p.Property<any>
     arrays_processed: p.Property<string[]>
     enable_keybindings: p.Property<boolean>
-    context_name: p.Property<string>
     one_time_reset: p.Property<boolean>
   }
 }
@@ -225,7 +211,6 @@ export class VTKSynchronizedPlot extends AbstractVTKPlot {
       arrays:             [ p.Any, {}        ],
       arrays_processed:   [ p.Array, []      ],
       enable_keybindings: [ p.Boolean, false ],
-      context_name:       [ p.String, ''     ],
       one_time_reset:     [ p.Boolean        ],
     })
 
