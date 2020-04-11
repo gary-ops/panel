@@ -6,9 +6,9 @@ import {HTMLBox} from "@bokehjs/models/layouts/html_box"
 
 import {PanelHTMLBoxView, set_size} from "../layout"
 
-import  {vtkns, VolumeType, majorAxis} from "./vtk_utils"
+import {vtkns, VolumeType, majorAxis} from "./vtk_utils"
 
-export abstract class AbstractVTKView extends PanelHTMLBoxView{
+export abstract class AbstractVTKView extends PanelHTMLBoxView {
   model: AbstractVTKPlot
   protected _vtk_container: HTMLDivElement
   protected _vtk_renwin: any
@@ -24,15 +24,15 @@ export abstract class AbstractVTKView extends PanelHTMLBoxView{
     this.connect(this.model.properties.orientation_widget.change, () => {
       this._orientation_widget_visibility(this.model.orientation_widget)
     })
-    this.connect(this.model.properties.camera.change, () => this._set_camera_state())
+    this.connect(this.model.properties.camera.change, () =>
+      this._set_camera_state()
+    )
   }
 
   _orientation_widget_visibility(visibility: boolean): void {
     this._orientationWidget.setEnabled(visibility)
-    if(visibility)
-      this._widgetManager.enablePicking()
-    else
-      this._widgetManager.disablePicking()
+    if (visibility) this._widgetManager.enablePicking()
+    else this._widgetManager.disablePicking()
     this._orientationWidget.updateMarkerOrientation()
     this._vtk_renwin.getRenderWindow().render()
   }
@@ -67,16 +67,16 @@ export abstract class AbstractVTKView extends PanelHTMLBoxView{
     this._widgetManager = widgetManager
 
     // Manage user interaction
-    vw.onOrientationChange(({direction} : any) => {
+    vw.onOrientationChange(({direction}: any) => {
       const camera = this._vtk_renwin.getRenderer().getActiveCamera()
       const focalPoint = camera.getFocalPoint()
       const position = camera.getPosition()
       const viewUp = camera.getViewUp()
 
       const distance = Math.sqrt(
-        Math.pow(position[0]-focalPoint[0],2) +
-        Math.pow(position[1]-focalPoint[1],2) +
-        Math.pow(position[2]-focalPoint[2],2)
+        Math.pow(position[0] - focalPoint[0], 2) +
+          Math.pow(position[1] - focalPoint[1], 2) +
+          Math.pow(position[2] - focalPoint[2], 2)
       )
 
       camera.setPosition(
@@ -85,25 +85,28 @@ export abstract class AbstractVTKView extends PanelHTMLBoxView{
         focalPoint[2] + direction[2] * distance
       )
 
-      if (direction[0])
-        camera.setViewUp(majorAxis(viewUp, 1, 2))
-      if (direction[1])
-        camera.setViewUp(majorAxis(viewUp, 0, 2))
-      if (direction[2])
-        camera.setViewUp(majorAxis(viewUp, 0, 1))
+      if (direction[0]) camera.setViewUp(majorAxis(viewUp, 1, 2))
+      if (direction[1]) camera.setViewUp(majorAxis(viewUp, 0, 2))
+      if (direction[2]) camera.setViewUp(majorAxis(viewUp, 0, 1))
 
-      this._orientationWidget.updateMarkerOrientation()
       this._vtk_renwin.getRenderer().resetCameraClippingRange()
-      this._vtk_renwin.getRenderWindow().render()
+      this._vtk_render()
     })
     this._orientation_widget_visibility(this.model.orientation_widget)
   }
 
+  _vtk_render(): void {
+    if (this._orientationWidget)
+      this._orientationWidget.updateMarkerOrientation()
+    this._vtk_renwin.getRenderWindow().render()
+  }
 
   _get_camera_state(): void {
     if (!this._setting_camera) {
       this._setting_camera = true
-      const state = clone(this._vtk_renwin.getRenderer().getActiveCamera().get())
+      const state = clone(
+        this._vtk_renwin.getRenderer().getActiveCamera().get()
+      )
       delete state.classHierarchy
       delete state.vtkObject
       delete state.vtkCamera
@@ -117,14 +120,16 @@ export abstract class AbstractVTKView extends PanelHTMLBoxView{
     if (!this._setting_camera) {
       this._setting_camera = true
       try {
-        if(this.model.camera)
-          this._vtk_renwin.getRenderer().getActiveCamera().set(this.model.camera)
+        if (this.model.camera)
+          this._vtk_renwin
+            .getRenderer()
+            .getActiveCamera()
+            .set(this.model.camera)
       } finally {
         this._setting_camera = false
       }
-      this._orientationWidget.updateMarkerOrientation()
       this._vtk_renwin.getRenderer().resetCameraClippingRange()
-      this._vtk_renwin.getRenderWindow().render()
+      this._vtk_render()
     }
   }
 
@@ -136,13 +141,14 @@ export abstract class AbstractVTKView extends PanelHTMLBoxView{
     this.el.appendChild(this._vtk_container)
     this._vtk_renwin = vtkns.FullScreenRenderWindow.newInstance({
       rootContainer: this.el,
-      container: this._vtk_container
+      container: this._vtk_container,
     })
     this._remove_default_key_binding()
     this._create_orientation_widget()
-    this._vtk_renwin.getRenderer().getActiveCamera().onModified(
-      () => this._get_camera_state()
-    )
+    this._vtk_renwin
+      .getRenderer()
+      .getActiveCamera()
+      .onModified(() => this._get_camera_state())
     this._set_camera_state()
     this.model.renderer_el = this._vtk_renwin
   }
@@ -154,16 +160,22 @@ export abstract class AbstractVTKView extends PanelHTMLBoxView{
 
   _remove_default_key_binding(): void {
     const interactor = this._vtk_renwin.getInteractor()
-    document.querySelector('body')!.removeEventListener('keypress',interactor.handleKeyPress)
-    document.querySelector('body')!.removeEventListener('keydown',interactor.handleKeyDown)
-    document.querySelector('body')!.removeEventListener('keyup',interactor.handleKeyUp)
+    document
+      .querySelector("body")!
+      .removeEventListener("keypress", interactor.handleKeyPress)
+    document
+      .querySelector("body")!
+      .removeEventListener("keydown", interactor.handleKeyDown)
+    document
+      .querySelector("body")!
+      .removeEventListener("keyup", interactor.handleKeyUp)
   }
 }
 
 export namespace AbstractVTKPlot {
   export type Attrs = p.AttrsOf<Props>
   export type Props = HTMLBox.Props & {
-    data: p.Property<string|VolumeType>
+    data: p.Property<string | VolumeType>
     camera: p.Property<any>
     orientation_widget: p.Property<boolean>
   }
@@ -181,11 +193,11 @@ export abstract class AbstractVTKPlot extends HTMLBox {
     super(attrs)
   }
 
-  getActors() : any[] {
+  getActors(): any[] {
     return this.renderer_el.getRenderer().getActors()
   }
 
-  static init_AbstractVTKPlot(): void{
+  static init_AbstractVTKPlot(): void {
     this.define<AbstractVTKPlot.Props>({
       orientation_widget: [ p.Boolean, false ],
       camera:             [ p.Instance       ],
@@ -193,7 +205,7 @@ export abstract class AbstractVTKPlot extends HTMLBox {
 
     this.override({
       height: 300,
-      width: 300
+      width: 300,
     })
   }
 }

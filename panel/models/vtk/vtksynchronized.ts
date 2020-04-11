@@ -5,9 +5,9 @@ import {AbstractVTKView, AbstractVTKPlot} from "./vtk_layout"
 import {div} from "@bokehjs/core/dom"
 import {set_size} from "../layout"
 import {FullScreenRenderWindowSynchronized} from "./panel_fullscreen_renwin_sync"
-import { vtkns } from "./vtk_utils"
+import {vtkns} from "./vtk_utils"
 
-const CONTEXT_NAME = 'panel'
+const CONTEXT_NAME = "panel"
 
 export class VTKSynchronizedPlotView extends AbstractVTKView {
   model: VTKSynchronizedPlot
@@ -21,32 +21,32 @@ export class VTKSynchronizedPlotView extends AbstractVTKView {
 
   initialize(): void {
     super.initialize()
-    this._arrays = {};
-    this._decoded_arrays = {};
-    this._pending_arrays = {};
+    this._arrays = {}
+    this._decoded_arrays = {}
+    this._pending_arrays = {}
     // Internal closures
     this.getArray = (hash: string) => {
       if (this._arrays[hash]) {
-          return Promise.resolve(this._arrays[hash]);
+        return Promise.resolve(this._arrays[hash])
       }
 
       return new Promise((resolve, reject) => {
-        this._pending_arrays[hash] = { resolve, reject };
-      });
-    };
+        this._pending_arrays[hash] = {resolve, reject}
+      })
+    }
 
-    this.registerArray = (hash: string, array: any) =>
-    {
-      this._arrays[hash] = array;
+    this.registerArray = (hash: string, array: any) => {
+      this._arrays[hash] = array
       if (this._pending_arrays[hash]) {
-          this._pending_arrays[hash].resolve(array);
+        this._pending_arrays[hash].resolve(array)
       }
-      return true;
-    };
+      return true
+    }
 
     // Context initialisation
-    this._synchronizer_context = vtkns.SynchronizableRenderWindow
-                                      .getSynchronizerContext(CONTEXT_NAME)
+    this._synchronizer_context = vtkns.SynchronizableRenderWindow.getSynchronizerContext(
+      CONTEXT_NAME
+    )
   }
 
   render(): void {
@@ -56,16 +56,16 @@ export class VTKSynchronizedPlotView extends AbstractVTKView {
     set_size(this._vtk_container, this.model)
     this.el.appendChild(this._vtk_container)
     let renderer = null
-    if(this._vtk_renwin){
+    if (this._vtk_renwin) {
       renderer = this._vtk_renwin.getRenderer()
     }
     this._vtk_renwin = FullScreenRenderWindowSynchronized.newInstance({
       rootContainer: this.el,
       container: this._vtk_container,
-      synchronizerContext: this._synchronizer_context
+      synchronizerContext: this._synchronizer_context,
     })
     
-    if(!renderer) {
+    if (!renderer) {
       this._vtk_renwin.getRenderWindow().clearOneTimeUpdaters()
       this._decode_arrays()
       this._plot()
@@ -74,36 +74,31 @@ export class VTKSynchronizedPlotView extends AbstractVTKView {
     }
     this._remove_default_key_binding()
     // this._create_orientation_widget()
-    // this._orientationWidget.updateMarkerOrientation()
     this._vtk_renwin.getRenderer().resetCameraClippingRange()
-    this._vtk_renwin.getRenderWindow().render()
+    this._vtk_render()
     this.model.renderer_el = this._vtk_renwin
   }
 
-  after_layout(): void {
-    super.after_layout()
-  }
-
   _decode_arrays(): void {
-    const jszip = new (window as any).JSZip();
-    const promises: any = [];
-    const arrays: any = this.model.arrays;
-    const registerArray: any = this.registerArray;
-    const arrays_processed = this.model.arrays_processed;
+    const jszip = new (window as any).JSZip()
+    const promises: any = []
+    const arrays: any = this.model.arrays
+    const registerArray: any = this.registerArray
+    const arrays_processed = this.model.arrays_processed
 
     function load(key: string) {
-        return jszip.loadAsync(atob(arrays[key]))
-            .then((zip: any) => zip.file('data/' + key))
-            .then((zipEntry: any) => zipEntry.async('arraybuffer'))
+      return jszip
+        .loadAsync(atob(arrays[key]))
+        .then((zip: any) => zip.file("data/" + key))
+        .then((zipEntry: any) => zipEntry.async("arraybuffer"))
             .then((arraybuffer: any) => registerArray(key, arraybuffer))
-            .then(() => arrays_processed.push(key));
+        .then(() => arrays_processed.push(key))
     }
 
     Object.keys(arrays).forEach((key: string) => {
-        if (!this._decoded_arrays[key])
-        {
-            this._decoded_arrays[key] = true;
-            promises.push(load(key));
+      if (!this._decoded_arrays[key]) {
+        this._decoded_arrays[key] = true
+        promises.push(load(key))
         }
     })
     Promise.all(promises).then(() => {
@@ -111,34 +106,34 @@ export class VTKSynchronizedPlotView extends AbstractVTKView {
     })
   }
 
-  _plot(): void{
-    if(this._camera_callback){
+  _plot(): void {
+    if (this._camera_callback) {
       this._camera_callback.unsubscribe()
     }
     this._synchronizer_context.setFetchArrayFunction(this.getArray)
-    const renderer = this._synchronizer_context.getInstance(this.model.scene.dependencies[0].id)
-    if(renderer && !this._vtk_renwin.getRenderer()){
+    const renderer = this._synchronizer_context.getInstance(
+      this.model.scene.dependencies[0].id
+    )
+    if (renderer && !this._vtk_renwin.getRenderer()) {
       this._vtk_renwin.getRenderWindow().addRenderer(renderer)
     }
-    this._vtk_renwin.getRenderWindow().setSynchronizedViewId(this.model.scene.id)
+    this._vtk_renwin
+      .getRenderWindow()
+      .setSynchronizedViewId(this.model.scene.id)
     this._vtk_renwin.getRenderWindow().synchronize(this.model.scene)
-    this._vtk_renwin.getRenderWindow().render()
 
-    if(this._camera_callback){
+    if (this._camera_callback) {
       this._camera_callback.unsubscribe()
       this._camera_callback = null
     }
-    this._camera_callback = this._vtk_renwin.getRenderer().getActiveCamera().onModified(
-      () => {
-          if(this._orientationWidget)
-            this._orientationWidget.updateMarkerOrientation()
-          this._vtk_renwin.getInteractor().render()
-      }
-    )
+    this._camera_callback = this._vtk_renwin
+      .getRenderer()
+      .getActiveCamera()
+      .onModified(() => this._vtk_render())
   }
 
   remove(): void {
-    if(this._camera_callback){
+    if (this._camera_callback) {
       this._camera_callback.unsubscribe()
       this._camera_callback = null
     }
@@ -150,28 +145,42 @@ export class VTKSynchronizedPlotView extends AbstractVTKView {
     this.connect(this.model.properties.orientation_widget.change, () => {
       this._orientation_widget_visibility(this.model.orientation_widget)
     })
-    this.connect(this.model.properties.arrays.change, () => this._decode_arrays())
+    this.connect(this.model.properties.arrays.change, () =>
+      this._decode_arrays()
+    )
     this.connect(this.model.properties.scene.change, () => {
       this._plot()
+      this._vtk_render()
     })
     this.connect(this.model.properties.one_time_reset.change, () => {
       this._vtk_renwin.getRenderWindow().clearOneTimeUpdaters()
     })
-    this.el.addEventListener('mouseenter', () => {
+    this.el.addEventListener("mouseenter", () => {
       const interactor = this._vtk_renwin.getInteractor()
-      if(this.model.enable_keybindings){
-        document.querySelector('body')!.addEventListener('keypress',interactor.handleKeyPress)
-        document.querySelector('body')!.addEventListener('keydown',interactor.handleKeyDown)
-        document.querySelector('body')!.addEventListener('keyup',interactor.handleKeyUp)
+      if (this.model.enable_keybindings) {
+        document
+          .querySelector("body")!
+          .addEventListener("keypress", interactor.handleKeyPress)
+        document
+          .querySelector("body")!
+          .addEventListener("keydown", interactor.handleKeyDown)
+        document
+          .querySelector("body")!
+          .addEventListener("keyup", interactor.handleKeyUp)
       }
     })
-    this.el.addEventListener('mouseleave', () => {
+    this.el.addEventListener("mouseleave", () => {
       const interactor = this._vtk_renwin.getInteractor()
-      document.querySelector('body')!.removeEventListener('keypress',interactor.handleKeyPress)
-      document.querySelector('body')!.removeEventListener('keydown',interactor.handleKeyDown)
-      document.querySelector('body')!.removeEventListener('keyup',interactor.handleKeyUp)
+      document
+        .querySelector("body")!
+        .removeEventListener("keypress", interactor.handleKeyPress)
+      document
+        .querySelector("body")!
+        .removeEventListener("keydown", interactor.handleKeyDown)
+      document
+        .querySelector("body")!
+        .removeEventListener("keyup", interactor.handleKeyUp)
     })
-
   }
 }
 
@@ -199,7 +208,7 @@ export class VTKSynchronizedPlot extends AbstractVTKPlot {
     this.renderer_el = null
   }
 
-  getActors() : [any] {
+  getActors(): [any] {
     return this.renderer_el.getRenderer().getActors()
   }
 
@@ -216,7 +225,7 @@ export class VTKSynchronizedPlot extends AbstractVTKPlot {
 
     this.override({
       height: 300,
-      width: 300
+      width: 300,
     })
   }
 }
