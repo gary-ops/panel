@@ -16,6 +16,11 @@ export abstract class AbstractVTKView extends PanelHTMLBoxView {
   protected _widgetManager: any
   protected _setting_camera: boolean = false
 
+  initialize(): void {
+    super.initialize()
+    this._widgetManager = vtkns.WidgetManager.newInstance()
+  }
+
   connect_signals(): void {
     super.connect_signals()
     this.connect(this.model.properties.data.change, () => {
@@ -33,8 +38,7 @@ export abstract class AbstractVTKView extends PanelHTMLBoxView {
     this._orientationWidget.setEnabled(visibility)
     if (visibility) this._widgetManager.enablePicking()
     else this._widgetManager.disablePicking()
-    this._orientationWidget.updateMarkerOrientation()
-    this._vtk_renwin.getRenderWindow().render()
+    this._vtk_render()
   }
 
   _create_orientation_widget(): void {
@@ -50,21 +54,19 @@ export abstract class AbstractVTKView extends PanelHTMLBoxView {
       vtkns.OrientationMarkerWidget.Corners.BOTTOM_RIGHT
     )
     orientationWidget.setViewportSize(0.15)
-    orientationWidget.setMinPixelSize(100)
+    orientationWidget.setMinPixelSize(75)
     orientationWidget.setMaxPixelSize(300)
 
     this._orientationWidget = orientationWidget
 
-    const widgetManager = vtkns.WidgetManager.newInstance()
-    widgetManager.setRenderer(orientationWidget.getRenderer())
+    this._widgetManager.setRenderer(orientationWidget.getRenderer())
 
     const widget = vtkns.InteractiveOrientationWidget.newInstance()
     widget.placeWidget(axes.getBounds())
     widget.setBounds(axes.getBounds())
     widget.setPlaceFactor(1)
 
-    const vw = widgetManager.addWidget(widget)
-    this._widgetManager = widgetManager
+    const vw = this._widgetManager.addWidget(widget)
 
     // Manage user interaction
     vw.onOrientationChange(({direction}: any) => {

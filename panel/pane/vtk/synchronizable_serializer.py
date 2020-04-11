@@ -617,7 +617,7 @@ def genericMapperSerializer(parent, mapper, mapperId, context, depth):
         return {
             'parent': getReferenceId(parent),
             'id': mapperId,
-            'type': 'vtkMapper', # mapper.GetClassName()
+            'type': 'vtkMapper', # mapper.GetClassName(),
             'properties': {
                 'resolveCoincidentTopology': mapper.GetResolveCoincidentTopology(),
                 'renderTime': mapper.GetRenderTime(),

@@ -47,6 +47,7 @@ export class VTKSynchronizedPlotView extends AbstractVTKView {
     this._synchronizer_context = vtkns.SynchronizableRenderWindow.getSynchronizerContext(
       CONTEXT_NAME
     )
+    this._synchronizer_context.setFetchArrayFunction(this.getArray)
   }
 
   render(): void {
@@ -73,7 +74,7 @@ export class VTKSynchronizedPlotView extends AbstractVTKView {
       this._vtk_renwin.getRenderWindow().addRenderer(renderer)
     }
     this._remove_default_key_binding()
-    // this._create_orientation_widget()
+    this._create_orientation_widget()
     this._vtk_renwin.getRenderer().resetCameraClippingRange()
     this._vtk_render()
     this.model.renderer_el = this._vtk_renwin
@@ -110,7 +111,6 @@ export class VTKSynchronizedPlotView extends AbstractVTKView {
     if (this._camera_callback) {
       this._camera_callback.unsubscribe()
     }
-    this._synchronizer_context.setFetchArrayFunction(this.getArray)
     const renderer = this._synchronizer_context.getInstance(
       this.model.scene.dependencies[0].id
     )
@@ -121,7 +121,7 @@ export class VTKSynchronizedPlotView extends AbstractVTKView {
       .getRenderWindow()
       .setSynchronizedViewId(this.model.scene.id)
     this._vtk_renwin.getRenderWindow().synchronize(this.model.scene)
-
+    
     if (this._camera_callback) {
       this._camera_callback.unsubscribe()
       this._camera_callback = null
@@ -130,6 +130,12 @@ export class VTKSynchronizedPlotView extends AbstractVTKView {
       .getRenderer()
       .getActiveCamera()
       .onModified(() => this._vtk_render())
+
+    //hack to handle the orientation widget when synchronized
+    if (this._orientationWidget){
+      this._orientationWidget.setEnabled(false)
+      this._orientationWidget.setEnabled(this.model.orientation_widget)
+    }
   }
 
   remove(): void {
