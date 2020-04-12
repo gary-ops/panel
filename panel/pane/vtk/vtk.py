@@ -97,7 +97,10 @@ class VTKSynchronized(PaneBase):
 
         if root is None:
             root = model
-        self._link_props(model, ['enable_keybindings', 'orientation_widget', 'one_time_reset'], doc, root, comm)
+        self._link_props(model, 
+                         ['enable_keybindings', 'orientation_widget',
+                          'one_time_reset', 'camera'],
+                         doc, root, comm)
         self._models[root.ref['id']] = (model, parent)
         return model
 

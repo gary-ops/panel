@@ -15,12 +15,13 @@ export class VTKSynchronizedPlotView extends AbstractVTKView {
   protected _arrays: any
   protected _decoded_arrays: any
   protected _pending_arrays: any
-  protected _camera_callback: any
+  protected _camera_callbacks: any[]
   public getArray: CallableFunction
   public registerArray: CallableFunction
 
   initialize(): void {
     super.initialize()
+    this._camera_callbacks = []
     this._arrays = {}
     this._decoded_arrays = {}
     this._pending_arrays = {}
@@ -47,25 +48,24 @@ export class VTKSynchronizedPlotView extends AbstractVTKView {
     this._synchronizer_context = vtkns.SynchronizableRenderWindow.getSynchronizerContext(
       CONTEXT_NAME
     )
-    this._synchronizer_context.setFetchArrayFunction(this.getArray)
   }
 
   render(): void {
     PanelHTMLBoxView.prototype.render.call(this) // super.super.render()
     this._orientationWidget = null
-    this._vtk_container = div()
-    set_size(this._vtk_container, this.model)
-    this.el.appendChild(this._vtk_container)
     let renderer = null
     if (this._vtk_renwin) {
       renderer = this._vtk_renwin.getRenderer()
+    } else {
+      this._vtk_container = div()
     }
     this._vtk_renwin = FullScreenRenderWindowSynchronized.newInstance({
       rootContainer: this.el,
       container: this._vtk_container,
       synchronizerContext: this._synchronizer_context,
     })
-    
+    set_size(this._vtk_container, this.model)
+    this.el.appendChild(this._vtk_container)
     if (!renderer) {
       this._vtk_renwin.getRenderWindow().clearOneTimeUpdaters()
       this._decode_arrays()
@@ -74,8 +74,9 @@ export class VTKSynchronizedPlotView extends AbstractVTKView {
       this._vtk_renwin.getRenderWindow().addRenderer(renderer)
     }
     this._remove_default_key_binding()
+    this._bind_key_events()
     this._create_orientation_widget()
-    this._vtk_renwin.getRenderer().resetCameraClippingRange()
+    this._set_camera_state()
     this._vtk_render()
     this.model.renderer_el = this._vtk_renwin
   }
@@ -107,11 +108,16 @@ export class VTKSynchronizedPlotView extends AbstractVTKView {
     })
   }
 
+  _unsubscribe_camera_cb(): void {
+    this._camera_callbacks
+      .splice(0, this._camera_callbacks.length)
+      .map((cb) => cb.unsubscribe())
+  }
+
   _plot(): void {
-    if (this._camera_callback) {
-      this._camera_callback.unsubscribe()
-    }
-    const renderer = this._synchronizer_context.getInstance(
+    this._synchronizer_context.setFetchArrayFunction(this.getArray)
+    this._unsubscribe_camera_cb()
+        const renderer = this._synchronizer_context.getInstance(
       this.model.scene.dependencies[0].id
     )
     if (renderer && !this._vtk_renwin.getRenderer()) {
@@ -121,16 +127,19 @@ export class VTKSynchronizedPlotView extends AbstractVTKView {
       .getRenderWindow()
       .setSynchronizedViewId(this.model.scene.id)
     this._vtk_renwin.getRenderWindow().synchronize(this.model.scene)
-    
-    if (this._camera_callback) {
-      this._camera_callback.unsubscribe()
-      this._camera_callback = null
-    }
-    this._camera_callback = this._vtk_renwin
-      .getRenderer()
-      .getActiveCamera()
-      .onModified(() => this._vtk_render())
-
+    this._camera_callbacks.push(
+      this._vtk_renwin
+        .getRenderer()
+        .getActiveCamera()
+        .onModified(() => this._vtk_render())
+    )
+    // update model camera when modified
+    this._camera_callbacks.push(
+      this._vtk_renwin
+        .getRenderer()
+        .getActiveCamera()
+        .onModified(() => this._get_camera_state())
+    )
     //hack to handle the orientation widget when synchronized
     if (this._orientationWidget){
       this._orientationWidget.setEnabled(false)
@@ -139,18 +148,12 @@ export class VTKSynchronizedPlotView extends AbstractVTKView {
   }
 
   remove(): void {
-    if (this._camera_callback) {
-      this._camera_callback.unsubscribe()
-      this._camera_callback = null
-    }
+    this._unsubscribe_camera_cb()
     super.remove()
   }
 
   connect_signals(): void {
-    PanelHTMLBoxView.prototype.connect_signals.call(this) //super.super.connec_signals
-    this.connect(this.model.properties.orientation_widget.change, () => {
-      this._orientation_widget_visibility(this.model.orientation_widget)
-    })
+    super.connect_signals()
     this.connect(this.model.properties.arrays.change, () =>
       this._decode_arrays()
     )
@@ -161,32 +164,6 @@ export class VTKSynchronizedPlotView extends AbstractVTKView {
     this.connect(this.model.properties.one_time_reset.change, () => {
       this._vtk_renwin.getRenderWindow().clearOneTimeUpdaters()
     })
-    this.el.addEventListener("mouseenter", () => {
-      const interactor = this._vtk_renwin.getInteractor()
-      if (this.model.enable_keybindings) {
-        document
-          .querySelector("body")!
-          .addEventListener("keypress", interactor.handleKeyPress)
-        document
-          .querySelector("body")!
-          .addEventListener("keydown", interactor.handleKeyDown)
-        document
-          .querySelector("body")!
-          .addEventListener("keyup", interactor.handleKeyUp)
-      }
-    })
-    this.el.addEventListener("mouseleave", () => {
-      const interactor = this._vtk_renwin.getInteractor()
-      document
-        .querySelector("body")!
-        .removeEventListener("keypress", interactor.handleKeyPress)
-      document
-        .querySelector("body")!
-        .removeEventListener("keydown", interactor.handleKeyDown)
-      document
-        .querySelector("body")!
-        .removeEventListener("keyup", interactor.handleKeyUp)
-    })
   }
 }
 
@@ -196,7 +173,6 @@ export namespace VTKSynchronizedPlot {
     scene: p.Property<any>
     arrays: p.Property<any>
     arrays_processed: p.Property<string[]>
-    enable_keybindings: p.Property<boolean>
     one_time_reset: p.Property<boolean>
   }
 }

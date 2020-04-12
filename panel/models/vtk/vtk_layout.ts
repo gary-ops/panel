@@ -14,24 +14,50 @@ export abstract class AbstractVTKView extends PanelHTMLBoxView {
   protected _vtk_renwin: any
   protected _orientationWidget: any
   protected _widgetManager: any
-  protected _setting_camera: boolean = false
+  protected _setting_camera: boolean
 
   initialize(): void {
     super.initialize()
-    this._widgetManager = vtkns.WidgetManager.newInstance()
+    this._setting_camera = false
   }
 
   connect_signals(): void {
     super.connect_signals()
-    this.connect(this.model.properties.data.change, () => {
-      this.invalidate_render()
-    })
     this.connect(this.model.properties.orientation_widget.change, () => {
       this._orientation_widget_visibility(this.model.orientation_widget)
     })
     this.connect(this.model.properties.camera.change, () =>
       this._set_camera_state()
     )
+  }
+
+  _bind_key_events(): void {
+    this.el.addEventListener("mouseenter", () => {
+      const interactor = this._vtk_renwin.getInteractor()
+      if (this.model.enable_keybindings) {
+        document
+          .querySelector("body")!
+          .addEventListener("keypress", interactor.handleKeyPress)
+        document
+          .querySelector("body")!
+          .addEventListener("keydown", interactor.handleKeyDown)
+        document
+          .querySelector("body")!
+          .addEventListener("keyup", interactor.handleKeyUp)
+      }
+    })
+    this.el.addEventListener("mouseleave", () => {
+      const interactor = this._vtk_renwin.getInteractor()
+      document
+        .querySelector("body")!
+        .removeEventListener("keypress", interactor.handleKeyPress)
+      document
+        .querySelector("body")!
+        .removeEventListener("keydown", interactor.handleKeyDown)
+      document
+        .querySelector("body")!
+        .removeEventListener("keyup", interactor.handleKeyUp)
+    })
   }
 
   _orientation_widget_visibility(visibility: boolean): void {
@@ -45,21 +71,20 @@ export abstract class AbstractVTKView extends PanelHTMLBoxView {
     const axes = vtkns.AxesActor.newInstance()
 
     // add orientation widget
-    const orientationWidget = vtkns.OrientationMarkerWidget.newInstance({
+    this._orientationWidget = vtkns.OrientationMarkerWidget.newInstance({
       actor: axes,
       interactor: this._vtk_renwin.getInteractor(),
     })
-    orientationWidget.setEnabled(true)
-    orientationWidget.setViewportCorner(
+    this._orientationWidget.setEnabled(true)
+    this._orientationWidget.setViewportCorner(
       vtkns.OrientationMarkerWidget.Corners.BOTTOM_RIGHT
     )
-    orientationWidget.setViewportSize(0.15)
-    orientationWidget.setMinPixelSize(75)
-    orientationWidget.setMaxPixelSize(300)
-
-    this._orientationWidget = orientationWidget
-
-    this._widgetManager.setRenderer(orientationWidget.getRenderer())
+    this._orientationWidget.setViewportSize(0.15)
+    this._orientationWidget.setMinPixelSize(75)
+    this._orientationWidget.setMaxPixelSize(300)
+    
+    this._widgetManager = vtkns.WidgetManager.newInstance()
+    this._widgetManager.setRenderer(this._orientationWidget.getRenderer())
 
     const widget = vtkns.InteractiveOrientationWidget.newInstance()
     widget.placeWidget(axes.getBounds())
@@ -106,13 +131,13 @@ export abstract class AbstractVTKView extends PanelHTMLBoxView {
   _get_camera_state(): void {
     if (!this._setting_camera) {
       this._setting_camera = true
-      const state = clone(
-        this._vtk_renwin.getRenderer().getActiveCamera().get()
-      )
+      const state = clone(this._vtk_renwin.getRenderer().getActiveCamera().get())
       delete state.classHierarchy
       delete state.vtkObject
       delete state.vtkCamera
       delete state.viewPlaneNormal
+      delete state.flattenedDepIds
+      delete state.managedInstanceId
       this.model.camera = state
       this._setting_camera = false
     }
@@ -151,6 +176,7 @@ export abstract class AbstractVTKView extends PanelHTMLBoxView {
       .getRenderer()
       .getActiveCamera()
       .onModified(() => this._get_camera_state())
+    this._vtk_renwin.getRenderer().getActiveCamera().modified()
     this._set_camera_state()
     this.model.renderer_el = this._vtk_renwin
   }
@@ -158,6 +184,7 @@ export abstract class AbstractVTKView extends PanelHTMLBoxView {
   after_layout(): void {
     super.after_layout()
     this._vtk_renwin.resize()
+    this._vtk_render()
   }
 
   _remove_default_key_binding(): void {
@@ -180,6 +207,7 @@ export namespace AbstractVTKPlot {
     data: p.Property<string | VolumeType>
     camera: p.Property<any>
     orientation_widget: p.Property<boolean>
+    enable_keybindings: p.Property<boolean>
   }
 }
 

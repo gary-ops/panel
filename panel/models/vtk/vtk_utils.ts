@@ -85,13 +85,13 @@ declare type node = {
   b: number
 }
 
-export declare type Mapper = {
+export declare type ColorMapper = {
   palette: string[],
   low: number,
   high: number,
 }
 
-export function vtkLutToMapper(vtk_lut: any):  Mapper {
+export function vtkLutToMapper(vtk_lut: any):  ColorMapper {
   //For the moment only linear colormapper are handle
   const {scale, nodes} = vtk_lut.get('scale', 'nodes')
   if (scale !== vtkns.ColorTransferFunction.Scale.LINEAR)
