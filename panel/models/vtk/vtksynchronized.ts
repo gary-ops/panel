@@ -77,7 +77,7 @@ export class VTKSynchronizedPlotView extends AbstractVTKView {
     this._bind_key_events()
     this._create_orientation_widget()
     this._set_camera_state()
-    this._vtk_render()
+    this._set_axes()
     this.model.renderer_el = this._vtk_renwin
   }
 
@@ -117,7 +117,7 @@ export class VTKSynchronizedPlotView extends AbstractVTKView {
   _plot(): void {
     this._synchronizer_context.setFetchArrayFunction(this.getArray)
     this._unsubscribe_camera_cb()
-        const renderer = this._synchronizer_context.getInstance(
+    const renderer = this._synchronizer_context.getInstance(
       this.model.scene.dependencies[0].id
     )
     if (renderer && !this._vtk_renwin.getRenderer()) {
@@ -131,14 +131,10 @@ export class VTKSynchronizedPlotView extends AbstractVTKView {
       this._vtk_renwin
         .getRenderer()
         .getActiveCamera()
-        .onModified(() => this._vtk_render())
-    )
-    // update model camera when modified
-    this._camera_callbacks.push(
-      this._vtk_renwin
-        .getRenderer()
-        .getActiveCamera()
-        .onModified(() => this._get_camera_state())
+        .onModified(() => {
+          this._get_camera_state()
+          this._vtk_render()
+        })
     )
     //hack to handle the orientation widget when synchronized
     if (this._orientationWidget){
@@ -170,10 +166,10 @@ export class VTKSynchronizedPlotView extends AbstractVTKView {
 export namespace VTKSynchronizedPlot {
   export type Attrs = p.AttrsOf<Props>
   export type Props = AbstractVTKPlot.Props & {
-    scene: p.Property<any>
     arrays: p.Property<any>
     arrays_processed: p.Property<string[]>
     one_time_reset: p.Property<boolean>
+    scene: p.Property<any>
   }
 }
 
@@ -198,11 +194,12 @@ export class VTKSynchronizedPlot extends AbstractVTKPlot {
     this.prototype.default_view = VTKSynchronizedPlotView
 
     this.define<VTKSynchronizedPlot.Props>({
-      scene:              [ p.Any, {}        ],
-      arrays:             [ p.Any, {}        ],
-      arrays_processed:   [ p.Array, []      ],
+      arrays:             [ p.Any,        {} ],
+      arrays_processed:   [ p.Array,      [] ],
+      axes:               [ p.Instance       ],
       enable_keybindings: [ p.Boolean, false ],
       one_time_reset:     [ p.Boolean        ],
+      scene:              [ p.Any,        {} ],
     })
 
     this.override({

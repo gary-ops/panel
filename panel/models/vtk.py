@@ -13,6 +13,30 @@ vtk_cdn = "https://unpkg.com/vtk.js"
 jszip_cdn = "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.5/jszip.js"
 
 
+class VTKAxes(Model):
+    """
+    A Bokeh model for axes
+    """
+
+    xticker = Dict(String, Any)
+
+    yticker = Dict(String, Any)
+
+    zticker = Dict(String, Any)
+
+    origin = Any()
+
+    digits = Int(default=1)
+
+    show_grid = Bool(default=True)
+
+    grid_opacity = Float(default=0.1)
+
+    axes_opacity = Float(default=1)
+
+    fontsize = PositiveInt(default=12)
+
+
 @abstract
 class AbstractVTKPlot(HTMLBox):
     """
@@ -41,6 +65,8 @@ class AbstractVTKPlot(HTMLBox):
     height = Override(default=300)
 
     width = Override(default=300)
+
+    axes = Instance(VTKAxes)
 
 
 class VTKSynchronizedPlot(AbstractVTKPlot):
@@ -73,31 +99,6 @@ class VTKSynchronizedPlot(AbstractVTKPlot):
     arrays_processed = List(String)
 
 
-class VTKAxes(Model):
-    """
-    A Bokeh model for axes
-    """
-
-    xticker = Dict(String, Any)
-
-    yticker = Dict(String, Any)
-
-    zticker = Dict(String, Any)
-
-    origin = Any()
-
-    digits = Int(default=1)
-
-    show_grid = Bool(default=True)
-
-    grid_opacity = Float(default=0.1)
-
-    axes_opacity = Float(default=1)
-
-    fontsize = PositiveInt(default=12)
-
-
-
 class VTKPlot(AbstractVTKPlot):
     """
     Bokeh model dedicated to plot a vtk render window with only 3D geometry objects
@@ -105,8 +106,6 @@ class VTKPlot(AbstractVTKPlot):
     """
 
     data = String(help="""The serialized vtk.js data""")
-
-    axes = Instance(VTKAxes)
 
     enable_keybindings = Bool(default=False)
 

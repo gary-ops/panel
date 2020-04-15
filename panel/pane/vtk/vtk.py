@@ -32,6 +32,29 @@ class VTKSynchronized(PaneBase):
     VTK panes allow rendering VTK objects.
     """
 
+    axes = param.Dict(doc="""
+        Parameters of the axes to construct in the 3d view.
+
+        Must contain at least ``xticker``, ``yticker`` and ``zticker``.
+
+        A ``ticker`` is a dictionary which contains:
+          - ``ticks`` (array of numbers) - required.
+              Positions in the scene coordinates of the corresponding
+              axis' ticks.
+          - ``labels`` (array of strings) - optional.
+              Label displayed respectively to the `ticks` positions.
+              If `labels` are not defined they are infered from the
+              `ticks` array.
+          - ``digits``: number of decimal digits when `ticks` are converted to `labels`.
+          - ``fontsize``: size in pts of the ticks labels.
+          - ``show_grid``: boolean.
+                If true (default) the axes grid is visible.
+          - ``grid_opacity``: float between 0-1.
+                Defines the grid opacity.
+          - ``axes_opacity``: float between 0-1.
+                Defines the axes lines opacity.
+    """)
+
     camera = param.Dict(doc="""State of the rendered VTK camera.""")
 
     enable_keybindings = param.Boolean(default=False, doc="""
@@ -104,6 +127,27 @@ class VTKSynchronized(PaneBase):
         self._models[root.ref['id']] = (model, parent)
         return model
 
+    def _process_param_change(self, msg):
+        msg = super(VTKSynchronized, self)._process_param_change(msg)
+        if 'axes' in msg and msg['axes'] is not None:
+            VTKAxes = getattr(sys.modules['panel.models.vtk'], 'VTKAxes')
+            axes = msg['axes']
+            msg['axes'] = VTKAxes(**axes)
+        return msg
+
+    def _update_model(self, events, msg, root, model, doc, comm):
+        if 'axes' in msg and msg['axes'] is not None:
+            VTKAxes = getattr(sys.modules['panel.models.vtk'], 'VTKAxes')
+            axes = msg['axes']
+            if isinstance(axes, dict):
+                msg['axes'] = VTKAxes(**axes)
+            elif isinstance(axes, VTKAxes):
+                msg['axes'] = VTKAxes(**axes.properties_with_values())
+        super(VTKSynchronized, self)._update_model(events, msg, root, model, doc, comm)
+    
+    def set_background(self, r, g, b):
+        self.get_renderer().SetBackground(r, g, b)
+
     def link_camera(self, other):
         """
         Associate the camera of an other VTKSynchronized pane to this renderer
@@ -144,10 +188,17 @@ class VTKSynchronized(PaneBase):
         Create a fresh vtkCamera instance and set it to the renderer
         """
         import vtk
+        old_camera = self.get_renderer().GetActiveCamera()
         new_camera = vtk.vtkCamera()
         self.get_renderer().SetActiveCamera(new_camera)
-        self.get_renderer().ResetCamera()
-        self.get_renderer().ResetCameraClippingRange()
+        if self.camera is not None:
+            for k, v in self.camera.items():
+                if type(v) is list:
+                    getattr(new_camera, 'Set' + k[0].capitalize() + k[1:])(*v)
+                else:
+                    getattr(new_camera, 'Set' + k[0].capitalize() + k[1:])(v)
+        else:
+            new_camera.DeepCopy(old_camera)
         self.param.trigger('object')
 
     def _serialize_ren_win(self, ren_win):
@@ -599,6 +650,16 @@ class VTK(PaneBase):
             self._vtkjs = vtkjs
 
         return self._vtkjs
+
+    def _update_model(self, events, msg, root, model, doc, comm):
+        if 'axes' in msg and msg['axes'] is not None:
+            VTKAxes = getattr(sys.modules['panel.models.vtk'], 'VTKAxes')
+            axes = msg['axes']
+            if isinstance(axes, dict):
+                msg['axes'] = VTKAxes(**axes)
+            elif isinstance(axes, VTKAxes):
+                msg['axes'] = VTKAxes(**axes.properties_with_values())
+        super(VTK, self)._update_model(events, msg, root, model, doc, comm)
 
     def _update(self, model):
         self._vtkjs = None
